@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react'
 import { createEmployees, getEmployees, deleteEmployees, updateEmployees } from '../Services/SetupAxios'
 import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Checkbox, Button, TextField, IconButton
-  } from '@mui/material';
-import { Add, Delete } from '@mui/icons-material'
+  } from '@mui/material'
+import { Add } from '@mui/icons-material'
 
 const Employee = () => {
-    const [employees, setEmployees] = React.useState([]) // Variabel untuk menyimpan data Employee
+    const [employees, setEmployees] = React.useState([]) // Variabel untuk menyimpan data Employee, kegunaannya untuk Update
     const [selectedIds, setSelectedIds] = useState([]) // Variabel untuk menyimpan Id Employee yang sudah dipilih untuk kebutuhan Delete nantinya
-    const [newRows, setNewRows] = useState([]); // Variabel untuk menyimpan Id Employee yang sudah dipilih untuk kebutuhan Delete nantinya
+    const [newRows, setNewRows] = useState([]) // Variabel untuk menyimpan Employee untuk kebutuhan Add nantinya
+    const [isIdle, setIsIdle] = useState(false) // Variabel untuk menunjukan user berstatus idle atau tidak
 
     // Fetch data dari API get all Employee
     const fetchData = async () => {
@@ -18,9 +19,8 @@ const Employee = () => {
                 setEmployees(response.data)
                 console.log("Employees:",employees)
             }
-            
         } catch (error) {
-            console.log("Error get Employees:", e)
+            console.log("Error get Employees:", error)
         }
     }
 
@@ -29,18 +29,69 @@ const Employee = () => {
         fetchData()
     }, [])
 
+    // Idle detection, ketika terakhir ada perubahan pada var employee atau newrows, maka akan memulai hitung mundur 15 detik
+    useEffect(() => {
+        const timer = setTimeout(() => {
+          setIsIdle(true)
+        }, 15000) // 15 detik timer untuk masuk ke status idle
+    
+        return () => {
+          clearTimeout(timer) 
+          setIsIdle(false)
+        }
+    }, [employees, newRows])
+
+    useEffect(() => {
+        if (isIdle) {
+            handleAutosave()
+        }
+    }, [isIdle])
+
     // Handler ketika ada value input yang berubah
-    const handleInputChange = (e, id, field) => {
-        const updatedEmployees = employees.map((emp) =>
-          emp.id === id ? { ...emp, [field]: e.target.value } : emp
-        )
-        setEmployees(updatedEmployees)
+    const handleInputChange = (e, id, field, isNew = false) => {
+        if (isNew) {
+            const updatedNewRows = newRows.map((row, index) =>
+              index === id ? { ...row, [field]: e.target.value } : row
+            )
+            setNewRows(updatedNewRows)
+        } else {
+            const updatedEmployees = employees.map((emp) =>
+              emp.id === id ? { ...emp, [field]: e.target.value } : emp
+            )
+            setEmployees(updatedEmployees)
+        }
     }
     
+    // ====================================================== Autosave ====================================================== //
+    // Function autosave add dan update, apabila row nya valid (tidak ada field yang kosong)
+    const handleAutosave = () => {
+        const validNewRows = newRows.filter(row => row.name && row.position && row.salary)
+        const validUpdatedRows = employees.filter(employee => employee.name && employee.position && employee.salary)
+
+        if (validNewRows.length > 0) {
+            createEmployees(validNewRows)
+                .then(() => {
+                    fetchData()
+                    setNewRows([])
+                })
+                .catch((error) => {
+                    console.error("Error creating employees: ", error)
+                })
+        }
+
+        if (validUpdatedRows.length > 0) {
+            updateEmployees(validUpdatedRows)
+                .then(fetchData)
+                .catch((error) => {
+                    console.error("Error updating employees: ", error)
+                })
+        }
+    }
+
     // ====================================================== Add ====================================================== //
     // Handler call API Create Employee
     const handleAdd = () => {
-        const allFilled = newRows.every(row => row.name && row.position && row.salary);
+        const allFilled = newRows.every(row => row.name && row.position && row.salary)
         if (allFilled) {
         createEmployees(newRows)
             .then(() => {
@@ -57,7 +108,7 @@ const Employee = () => {
 
     // Handler membuat baris baru untuk kebutuhan add employee
     const handleAddRow = () => {
-        setNewRows([...newRows, { name: '', position: '', salary: '' }]);
+        setNewRows([...newRows, { name: '', position: '', salary: '' }])
     }
 
     // ====================================================== Update ====================================================== //
@@ -82,7 +133,7 @@ const Employee = () => {
             .catch((error) => {
                 console.error("Error deleting employees: ", error)
             })
-            setSelectedIds([]);
+            setSelectedIds([])
         } else {
             alert('Please select at least one employee to delete.')
         }
@@ -101,6 +152,9 @@ const Employee = () => {
                 <Table>
                     <TableHead>
                         <TableRow>
+                            <TableCell padding="checkbox">
+                                <Checkbox />
+                            </TableCell>
                             <TableCell>ID</TableCell>
                             <TableCell>Name</TableCell>
                             <TableCell>Position</TableCell>
@@ -187,7 +241,6 @@ const Employee = () => {
                     Delete
                 </Button>
             </div>
-
         </>
     )
 }
